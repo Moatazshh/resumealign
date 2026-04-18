@@ -287,12 +287,14 @@
             animation: fadeIn 0.5s ease;
         }
 
-        .preview-container h1 { font-size: 18pt; text-transform: uppercase; margin-bottom: 0.5rem; text-align: center; font-weight: 700; }
-        .preview-container h2 { font-size: 13pt; text-transform: uppercase; border-bottom: 1px solid #000; margin-top: 1.5rem; margin-bottom: 0.75rem; padding-bottom: 2px; font-weight: 600; }
-        .preview-container h3 { font-size: 11pt; font-weight: 600; margin-top: 1rem; margin-bottom: 0.25rem; }
+        .preview-container h1 { font-size: 22pt; text-transform: uppercase; margin-bottom: 0.25rem; text-align: center; font-weight: 700; letter-spacing: 1px; }
+        .preview-container h1 + p { text-align: center; margin-bottom: 1.5rem; font-size: 10.5pt; color: #333; }
+        .preview-container h2 { font-size: 12pt; text-transform: uppercase; border-bottom: 1px solid #000; margin-top: 1.25rem; margin-bottom: 0.5rem; padding-bottom: 2px; font-weight: 700; letter-spacing: 0.5px; }
+        .preview-container h3 { font-size: 11pt; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.25rem; }
         .preview-container p { margin-bottom: 0.5rem; }
-        .preview-container ul { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .preview-container ul { margin-left: 1.5rem; margin-bottom: 0.75rem; }
         .preview-container li { margin-bottom: 0.25rem; }
+        .preview-container a { color: inherit; text-decoration: none; }
 
         /* Empty State */
         .empty-state {
@@ -727,8 +729,21 @@
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(" ");
-                fullText += pageText + "\n";
+                
+                let lastY = -1;
+                let pageText = "";
+                
+                for (let item of textContent.items) {
+                    if (lastY !== -1 && Math.abs(lastY - item.transform[5]) > 5) {
+                        pageText += "\n";
+                    } else if (lastY !== -1 && item.str.trim() !== "") {
+                        pageText += " ";
+                    }
+                    pageText += item.str;
+                    lastY = item.transform[5];
+                }
+                
+                fullText += pageText + "\n\n";
             }
             return fullText;
         }
@@ -778,7 +793,7 @@
 ATS OPTIMIZATION RULES:
 - Use exact keywords, phrases, and terminology from the job description — ATS systems scan for literal matches.
 - Avoid tables, columns, text boxes, headers/footers, images, icons, or any special characters that ATS parsers cannot read.
-- Use only standard section headers that ATS systems recognize: SUMMARY, EXPERIENCE, EDUCATION, SKILLS, CERTIFICATIONS.
+- Start with the candidate's name as a top-level heading (# Name), followed by their contact information on the next line. Then use ONLY H2 markdown headers (##) for standard section headers that ATS systems recognize: ## SUMMARY, ## EXPERIENCE, ## EDUCATION, ## SKILLS, ## CERTIFICATIONS.
 - List skills as a clean comma-separated or line-separated list under the SKILLS section — do not embed them only in bullet points.
 - Use a single-column, top-to-bottom text structure with no complex layout.
 - Spell out acronyms at least once alongside the abbreviation (e.g. 'Search Engine Optimization (SEO)') so both versions are present for ATS matching.
@@ -793,7 +808,8 @@ GENERAL RESUME RULES:
 - Rewrite or strengthen the SUMMARY section to directly reflect the target role's language and requirements.
 - Keep output as clean plain text with clear section headers and consistent formatting.
 - Output ONLY the tailored resume content. No commentary, no preamble, no explanations, no notes.
-- CRITICAL: Retain the EXACT structural formatting of the original resume (headings, bullet points, overall layout organization) in your markdown output, just rewriting the content to match the JD.
+- CRITICAL: The input resume text might lack proper line breaks or formatting due to PDF extraction. You MUST properly restructure it using standard Markdown headings (e.g., ## SUMMARY, ## EXPERIENCE), bold text for job titles and companies, and proper bullet points (-) for experience and skills. Do NOT output a single block of text.
+- CRITICAL: ALWAYS include the candidate's Name and Contact Information at the very top of the generated resume before the SUMMARY section.
 
 CRITICAL OUTPUT FORMAT:
 You MUST output your response as a valid JSON object with EXACTLY two keys:
@@ -846,6 +862,7 @@ Output ONLY valid JSON. Do not include markdown code blocks around the JSON.`;
                 document.getElementById('score-value').textContent = score + '%';
 
                 // Parse markdown to HTML
+                marked.use({ breaks: true });
                 let htmlContent = marked.parse(parsedResult.tailoredResume || "");
                 // Sanitize HTML to prevent XSS
                 htmlContent = DOMPurify.sanitize(htmlContent);
